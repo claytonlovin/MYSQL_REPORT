@@ -1,0 +1,57 @@
+---
+  - hosts: mysql_servers
+    vars:
+      ansible_python_interpreter: /usr/bin/python3
+    tasks:
+      - name: Obter nome do banco de dados
+        community.mysql.mysql_query:
+          login_user: "root"
+          login_password: "cs0209012"
+          login_host: "172.18.0.2"
+          query: "SELECT DATABASE() as db_name;"
+        register: db_name_output
+  
+      - name: Debug db_name_output
+        debug:
+          var: db_name_output
+  
+      - name: Obter tamanho do banco de dados (convertendo DECIMAL para STRING)
+        community.mysql.mysql_query:
+          login_user: "root"
+          login_password: "cs0209012"
+          login_host: "172.18.0.2"
+          query: |
+            SELECT table_schema AS db_name, 
+                   CAST(ROUND(SUM(data_length + index_length) / 1024 / 1024, 2) AS CHAR) AS db_size_mb 
+            FROM information_schema.tables 
+            WHERE table_schema = "db_powerhub_hm"
+            GROUP BY table_schema;
+        register: db_size_output
+  
+      - name: Debug db_size_output
+        debug:
+          var: db_size_output
+  
+      - name: Obter tabelas do banco de dados
+        community.mysql.mysql_query:
+          login_user: "root"
+          login_password: "cs0209012"
+          login_host: "172.18.0.2"
+          login_db: "db_powerhub_hm"
+          query: "SHOW TABLES;"
+        register: tables_output
+  
+      - name: Debug tables_output
+        debug:
+          var: tables_output
+      - name: Salvar dados em arquivo JSON (para uso no script Python)
+        copy:
+            content: |
+              {
+                "db_name": "db_powerhub_hm",  # Aqui estamos colocando o nome do banco diretamente
+                "db_size": "{{ db_size_output.query_result[0][0]['db_size_mb'] }}",
+                "tables": "{{ tables_output.query_result[0] | map(attribute='Tables_in_db_powerhub_hm') | list }}"
+              }
+            dest: /tmp/db_info.json
+        
+        
